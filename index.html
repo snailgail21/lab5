@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Lab 5</title>
+
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+           crossorigin=""/>
+
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+           crossorigin=""></script>
+
+
+        <script type="text/javascript" src="chicago.js"></script>
+
+        <style type="text/css">
+            /* Style of the Legend: adjust the values below to change the appearance of the legend pane*/
+            .legend {
+                padding: 6px 8px;
+                line-height: 18px;
+                background: rgba(255,255,255,0.9);
+                box-shadow: 0 0 15px rgba(0,0,0,0.2);
+                border-radius: 5px;
+            }
+
+            /* Adjust the values below to change the appearance of the legend color boxes */
+            .legend i {
+                width: 18px;
+                height: 18px;
+                float: left;
+                margin-right: 8px;
+                opacity: 0.7;
+            }
+        </style>
+	
+	<!-- Load the billboard.js stylesheet -->
+	<link href="https://cdn.jsdelivr.net/npm/billboard.js@4.1.1/dist/billboard.min.css" rel="stylesheet">
+
+	<!-- Load billboard.js (the "pkgd" version already includes D3) -->
+	<script src="https://cdn.jsdelivr.net/npm/billboard.js@4.1.1/dist/billboard.pkgd.min.js"></script>
+    
+	</head>
+
+    <body>
+        <div id="map" style="height: 500px"></div>
+        
+		<div id="chart"></div>
+        
+		<script type="text/javascript">
+
+            var map = L.map('map', {
+              center: [41.83,-87.7],
+              zoom: 10
+            });
+
+             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+               attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+               maxZoom: 11,
+               minZoom: 5
+             }).addTo(map);
+
+            function getColor(value) {
+                return value > 25954 ? '#ffffcc':
+                       value > 18678  ? '#c2e699':
+                       value > 13105  ? '#78c679':
+                       value > 8514  ? '#21a354':
+                                     '#006837';
+            }
+
+            function style(feature){
+                return {
+                    fillColor: getColor(feature.properties.popden),   // pop_den is the field name for the population density data
+                    weight: 2,
+                    opacity: 1,
+                    color: 'gray',
+                    fillOpacity: 0.9
+                };
+            }
+                          
+			function makeChart(props) {
+// props is just a variable, which will be replaced with the layer's properties 
+// when using the function
+    bb.generate({   
+    
+        bindto: '#chart',  // id of the chart div, as defined earlier in the chart div
+
+        size: {  // size (height and width) of the chart, by pixels
+            height: 180,
+            width: 180        
+        },
+
+        title:{
+            text: props.NAME  // Use the NAME attribute as chart title 
+                              // This is displayed above the chart
+                              // You may use other strings, HTML elements or combined
+        },
+
+        data: {
+            // Define the actual data
+            // I use the attribute values as data for making the charts
+            // The strings are labels of the charts (shown in legend)
+            columns: [  
+                ['White', props.White],
+                ['Black', props.Black],
+				['Hispanic', props.Hispanic],
+				['American Indian', props.AmericanIn],
+                ['Asian', props.Asian],
+                ['Other', props.Other],
+				['Multiracial', props.Multiracia]
+            ],
+
+            type: 'pie',  // chart type
+        },
+
+        pie:{ // options to customize the donut chart
+            label: {
+                show: false // set to not show labels on the segments (too busy)
+            },
+            width: 30  // width of donut
+        },
+
+        color:{ // colors of donut segments, same order as the data defined under columns
+            pattern:["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#CC79A7", "#0072B2", "#D55E00"] // a colorblind-safe set (Okabe-Ito)
+        }
+    });
+}
+
+            function highlightFeature(e) {
+				var layer = e.target;
+                
+                // You can adjust the values below to change the highlighting styles of features on mouseover
+                layer.setStyle({
+                    weight: 5,
+                    color: '#666',
+                    dashArray: '6', // defines the stroke dash pattern; check out the link for more: https://goo.gl/AWl5sC  
+                    fillOpacity: 0.7
+                });
+
+                // Fix display layer problems with IE and Opera (no need to change anything)
+                if (!L.Browser.ie && !L.Browser.opera) {
+                    layer.bringToFront();
+                }  				
+            }
+        
+            var geojson;
+            
+            function resetHighlight(e) {
+                geojson.resetStyle(e.target);
+
+            }
+
+            // Combine the mouseover and mouseout actions (defined above)
+            function onEachFeature(feature, layer) {
+                layer.on({
+                    mouseover: highlightFeature,
+                    mouseout: resetHighlight,
+                });
+            }
+                                 
+			var tooltip = document.getElementById("chart");
+          
+            geojson = L.geoJson(data, {
+                style:style,
+                onEachFeature: onEachFeature
+            }).bindTooltip(tooltip).addTo(map);
+            
+			geojson.on('tooltipopen', function(e) {
+			makeChart(e.layer.feature.properties);
+			});
+			
+            var legend = L.control({position: 'bottomright'}); // Try the other three corners if you like.
+
+            legend.onAdd = function (map) {
+
+                var div = L.DomUtil.create('div', 'legend'),
+                    grades = [0, 8514, 13105, 18678, 25954]; // The break values to define the intervals of population, note we begin from 0 here
+
+                div.innerHTML = '<b>Population Density <br> 2020 <br></b>'; // The legend title (HTML-based), in this case it's Population Density 2011
+
+                // Loop through our the classes and generate a label with a color box for each interval.
+                // If you are creating a choropleth map, you DO NOT need to change lines below.
+                for (var i = 0; i < grades.length; i++) {
+                    div.innerHTML +=
+                    '<i style="background:' + getColor(grades[i] + 1) + '"></i>' +
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+                }
+
+                return div;
+            };
+
+            legend.addTo(map);
+
+        </script>
+   </body>
+</html>
